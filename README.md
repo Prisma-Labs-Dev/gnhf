@@ -44,7 +44,7 @@ You wake up to a branch full of clean work and a log of everything that happened
 
 - **Dead simple** — one command starts an autonomous loop that runs until you Ctrl+C or a configured runtime cap is reached
 - **Long running** — each iteration is committed on success, rolled back on failure, with sensible retries and exponential backoff
-- **Agent-agnostic** — works with Claude Code or Codex out of the box
+- **Agent-agnostic** — works with Claude Code, Codex, or Rovo Dev out of the box
 
 ## Quick Start
 
@@ -79,6 +79,8 @@ npm install
 npm run build
 npm link
 ```
+
+If you want to run `gnhf --agent rovodev`, install Atlassian's `acli` and authenticate it with Rovo Dev first.
 
 ## How It Works
 
@@ -141,19 +143,19 @@ npm link
 
 ### Flags
 
-| Flag                   | Description                               | Default                |
-| ---------------------- | ----------------------------------------- | ---------------------- |
-| `--agent <agent>`      | Agent to use (`claude` or `codex`)        | config file (`claude`) |
-| `--max-iterations <n>` | Abort after `n` total iterations          | unlimited              |
-| `--max-tokens <n>`     | Abort after `n` total input+output tokens | unlimited              |
-| `--version`            | Show version                              |                        |
+| Flag                   | Description                                    | Default                |
+| ---------------------- | ---------------------------------------------- | ---------------------- |
+| `--agent <agent>`      | Agent to use (`claude`, `codex`, or `rovodev`) | config file (`claude`) |
+| `--max-iterations <n>` | Abort after `n` total iterations               | unlimited              |
+| `--max-tokens <n>`     | Abort after `n` total input+output tokens      | unlimited              |
+| `--version`            | Show version                                   |                        |
 
 ## Configuration
 
 Config lives at `~/.gnhf/config.yml`:
 
 ```yaml
-# Agent to use by default
+# Agent to use by default (claude, codex, or rovodev)
 agent: claude
 
 # Abort after this many consecutive failures
@@ -163,6 +165,8 @@ maxConsecutiveFailures: 3
 If the file does not exist yet, `gnhf` creates it on first run using the resolved defaults.
 
 CLI flags override config file values. The iteration and token caps are runtime-only flags and are not persisted in `config.yml`.
+
+When using `agent: rovodev`, `gnhf` starts a local `acli rovodev serve --disable-session-token <port>` process automatically in the repo workspace. That requires `acli` to be installed and already authenticated for Rovo Dev.
 
 ## Development
 
