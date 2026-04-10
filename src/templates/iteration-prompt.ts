@@ -8,7 +8,7 @@ This is iteration ${params.n}. Each iteration aims to make an incremental step f
 
 ## Instructions
 
-1. Read .gnhf/runs/${params.runId}/notes.md first to understand what has been done in previous iterations
+1. Read .gnhf/runs/${params.runId}/notes.md first to understand what has been done in previous iterations. Do NOT write to or modify notes.md - it is maintained automatically by the gnhf orchestrator
 2. Identify the next smallest logical unit of work that's individually verifiable and would make incremental progress towards the objective, and treat that as the scope of this iteration
 3. If you attempted a solution and it didn't end up moving the needle on the objective, document learnings and record success=false, then conclude the iteration rather than continuously pivoting
 4. If you made code changes, run build/tests/linters/formatters if available to validate your work. Do NOT make any git commits - that will be handled automatically by the gnhf orchestrator
