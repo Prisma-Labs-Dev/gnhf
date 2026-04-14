@@ -201,6 +201,76 @@ Result:
 - typecheck passed
 - focused test suite passed (`85` tests)
 
+## Iteration 5: Tracker Writeback And Result Recording
+
+Date: 2026-04-14
+
+### Goal
+
+Persist per-iteration outcome data back into the selected tracker task without changing default non-tracker runs.
+
+### What Changed
+
+Added:
+- `src/core/result-recorder.ts`
+
+Extended:
+- `src/core/tracker.ts` with tracker writeback helpers
+- `src/core/orchestrator.ts` with a recorder seam for iteration outcomes
+- `src/cli.ts` with optional tracker status transition flags
+
+CLI:
+- added `--tracker-success-status <status>`
+- added `--tracker-failure-status <status>`
+
+### Current Behavior
+
+When launched with:
+
+```bash
+gnhf --tracker-file /abs/path/tracker.json
+```
+
+the selected task now receives an `execution` object after each iteration containing:
+- run id
+- iteration number
+- timestamp
+- success/failure outcome
+- iteration summary
+- key changes
+- key learnings
+
+If status override flags are passed, the selected task status is also updated in place.
+
+### Why This Matters
+
+This is the first complete tracker loop:
+- select a predefined task
+- run against it
+- write structured evidence back to the task source
+
+That makes tracker-driven validation usable without requiring git commits or separate manual note copying.
+
+### Still Missing
+
+- execution history instead of last-write-wins metadata
+- markdown tracker projection
+- multi-task progression inside one run
+- richer validation-specific CLI UX beyond composable flags
+
+### Validation
+
+Validated locally with:
+
+```bash
+npm run typecheck
+npm test -- --run src/cli.test.ts src/core/tracker.test.ts src/core/run.test.ts src/core/orchestrator.test.ts src/core/git.test.ts
+```
+
+Result:
+- typecheck passed
+- focused test suite passed (`93` tests)
+
 ## Iteration 4: Tracker Contract And Task Selection
 
 Date: 2026-04-14

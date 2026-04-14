@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 
 export const DEFAULT_TRACKER_STATUSES = [
   "todo",
@@ -25,6 +25,13 @@ export interface TrackerFile {
 export interface TrackerSelectionOptions {
   taskId?: string;
   statuses?: string[];
+}
+
+export interface TrackerWritebackOptions {
+  path: string;
+  taskId: string;
+  successStatus?: string;
+  failureStatus?: string;
 }
 
 function asTrimmedString(value: unknown): string | undefined {
@@ -151,4 +158,61 @@ export function buildPromptFromTrackerTask(task: TrackerTask): string {
     lines.push("", "Context Files:", ...task.contextFiles.map((item) => `- ${item}`));
   }
   return lines.join("\n");
+}
+
+export interface ApplyTrackerWritebackParams extends TrackerWritebackOptions {
+  runId: string;
+  iteration: number;
+  success: boolean;
+  summary: string;
+  keyChanges: string[];
+  keyLearnings: string[];
+  timestamp: string;
+}
+
+export function applyTrackerWriteback(
+  params: ApplyTrackerWritebackParams,
+): void {
+  const raw = readFileSync(params.path, "utf-8");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(
+      `Failed to parse tracker file ${params.path} for writeback: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error(`Invalid tracker file ${params.path}: expected JSON object.`);
+  }
+  const tracker = parsed as Record<string, unknown>;
+  if (!Array.isArray(tracker.tasks)) {
+    throw new Error(`Invalid tracker file ${params.path}: tasks must be an array.`);
+  }
+  const tasks = tracker.tasks as unknown[];
+  const task = tasks.find((entry) => {
+    if (!entry || typeof entry !== "object") return false;
+    return (entry as Record<string, unknown>).id === params.taskId;
+  });
+  if (!task || typeof task !== "object") {
+    throw new Error(`Tracker task not found for writeback: ${params.taskId}`);
+  }
+  const taskRecord = task as Record<string, unknown>;
+  taskRecord.execution = {
+    tool: "gnhf",
+    runId: params.runId,
+    iteration: params.iteration,
+    updatedAt: params.timestamp,
+    outcome: params.success ? "success" : "failure",
+    summary: params.summary,
+    keyChanges: params.keyChanges,
+    keyLearnings: params.keyLearnings,
+  };
+  const nextStatus = params.success
+    ? params.successStatus
+    : params.failureStatus;
+  if (nextStatus?.trim()) {
+    taskRecord.status = nextStatus.trim();
+  }
+  writeFileSync(params.path, `${JSON.stringify(tracker, null, 2)}\n`, "utf-8");
 }

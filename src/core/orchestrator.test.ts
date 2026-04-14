@@ -35,7 +35,9 @@ import { appendNotes } from "./run.js";
 import { Orchestrator } from "./orchestrator.js";
 import type { Agent, AgentResult } from "./agents/types.js";
 import type { Config } from "./config.js";
+import type { ResultRecorder } from "./result-recorder.js";
 import type { RunInfo } from "./run.js";
+import { createDefaultWorkspaceStrategy } from "./workspace.js";
 
 const mockCommitAll = vi.mocked(commitAll);
 const mockAppendNotes = vi.mocked(appendNotes);
@@ -216,6 +218,87 @@ describe("Orchestrator output normalization", () => {
     );
     expect(mockCommitAll).toHaveBeenCalledTimes(1);
     expect(orchestrator.getState().status).toBe("aborted");
+  });
+
+  it("records successful iteration results through the result recorder", async () => {
+    const agent: Agent = {
+      name: "claude",
+      run: vi.fn(async () => createSuccessResult("done")),
+    };
+    const recorder: ResultRecorder = {
+      recordIteration: vi.fn(),
+    };
+    const orchestrator = new Orchestrator(
+      config,
+      agent,
+      runInfo,
+      "ship it",
+      "/repo",
+      0,
+      { maxIterations: 1 },
+      createDefaultWorkspaceStrategy(),
+      recorder,
+    );
+
+    await orchestrator.start();
+
+    expect(recorder.recordIteration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runId: "run-abc",
+        iteration: 1,
+        success: true,
+        summary: "done",
+      }),
+    );
+  });
+
+  it("records failed iteration results through the result recorder", async () => {
+    const agent: Agent = {
+      name: "claude",
+      run: vi.fn(
+        async () =>
+          ({
+            output: {
+              success: false,
+              summary: "not done",
+              key_changes_made: [],
+              key_learnings: ["learned"],
+            },
+            usage: {
+              inputTokens: 0,
+              outputTokens: 0,
+              cacheReadTokens: 0,
+              cacheCreationTokens: 0,
+            },
+          }) as unknown as AgentResult,
+      ),
+    };
+    const recorder: ResultRecorder = {
+      recordIteration: vi.fn(),
+    };
+    const orchestrator = new Orchestrator(
+      config,
+      agent,
+      runInfo,
+      "ship it",
+      "/repo",
+      0,
+      { maxIterations: 1 },
+      createDefaultWorkspaceStrategy(),
+      recorder,
+    );
+
+    await orchestrator.start();
+
+    expect(recorder.recordIteration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runId: "run-abc",
+        iteration: 1,
+        success: false,
+        summary: "not done",
+        keyLearnings: ["learned"],
+      }),
+    );
   });
 });
 

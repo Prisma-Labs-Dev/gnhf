@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("node:fs", () => ({
   readFileSync: vi.fn(),
+  writeFileSync: vi.fn(),
 }));
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import {
+  applyTrackerWriteback,
   buildPromptFromTrackerTask,
   DEFAULT_TRACKER_STATUSES,
   loadTrackerFile,
@@ -13,6 +15,7 @@ import {
 } from "./tracker.js";
 
 const mockReadFileSync = vi.mocked(readFileSync);
+const mockWriteFileSync = vi.mocked(writeFileSync);
 
 describe("tracker", () => {
   beforeEach(() => {
@@ -75,5 +78,41 @@ describe("tracker", () => {
     expect(prompt).toContain("Determine whether the probe failures are user-visible.");
     expect(prompt).toContain("- Reproduce issue");
     expect(prompt).toContain("- /abs/path/MEMORY.md");
+  });
+
+  it("writes iteration metadata back into the tracker file", () => {
+    mockReadFileSync.mockReturnValue(
+      JSON.stringify({
+        version: 1,
+        tasks: [{ id: "BV-010", title: "Investigate", status: "open" }],
+      }),
+    );
+
+    applyTrackerWriteback({
+      path: "/tracker.json",
+      taskId: "BV-010",
+      runId: "run-abc",
+      iteration: 2,
+      success: true,
+      summary: "Validated current behavior",
+      keyChanges: [],
+      keyLearnings: ["No user-facing failure observed"],
+      timestamp: "2026-04-14T10:00:00.000Z",
+      successStatus: "validated",
+    });
+
+    expect(mockWriteFileSync).toHaveBeenCalledTimes(1);
+    const written = JSON.parse(mockWriteFileSync.mock.calls[0]?.[1] as string);
+    expect(written.tasks[0].status).toBe("validated");
+    expect(written.tasks[0].execution).toEqual({
+      tool: "gnhf",
+      runId: "run-abc",
+      iteration: 2,
+      updatedAt: "2026-04-14T10:00:00.000Z",
+      outcome: "success",
+      summary: "Validated current behavior",
+      keyChanges: [],
+      keyLearnings: ["No user-facing failure observed"],
+    });
   });
 });

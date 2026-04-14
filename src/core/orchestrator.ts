@@ -10,6 +10,10 @@ import {
   createDefaultWorkspaceStrategy,
   type WorkspaceStrategy,
 } from "./workspace.js";
+import {
+  createDefaultResultRecorder,
+  type ResultRecorder,
+} from "./result-recorder.js";
 import { buildIterationPrompt } from "../templates/iteration-prompt.js";
 
 export interface IterationRecord {
@@ -64,6 +68,7 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
   private prompt: string;
   private limits: RunLimits;
   private workspace: WorkspaceStrategy;
+  private resultRecorder: ResultRecorder;
   private stopRequested = false;
   private stopPromise: Promise<void> | null = null;
   private activeIterationPromise: Promise<RunIterationResult> | null = null;
@@ -95,6 +100,7 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
     startIteration = 0,
     limits: RunLimits = {},
     workspace: WorkspaceStrategy = createDefaultWorkspaceStrategy(),
+    resultRecorder: ResultRecorder = createDefaultResultRecorder(),
   ) {
     super();
     this.config = config;
@@ -104,6 +110,7 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
     this.cwd = cwd;
     this.limits = limits;
     this.workspace = workspace;
+    this.resultRecorder = resultRecorder;
     this.state.currentIteration = startIteration;
     this.state.commitCount = this.workspace.getCommitCount(
       this.runInfo.baseCommit,
@@ -433,12 +440,14 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
   }
 
   private recordSuccess(output: AgentOutput): IterationRecord {
+    const keyChanges = toStringArray(output.key_changes_made);
+    const keyLearnings = toStringArray(output.key_learnings);
     appendNotes(
       this.runInfo.notesPath,
       this.state.currentIteration,
       output.summary,
-      toStringArray(output.key_changes_made),
-      toStringArray(output.key_learnings),
+      keyChanges,
+      keyLearnings,
     );
     this.state.commitCount = this.workspace.recordSuccess({
       cwd: this.cwd,
@@ -448,14 +457,16 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
     });
     this.state.successCount++;
     this.state.consecutiveFailures = 0;
-    return {
+    const record = {
       number: this.state.currentIteration,
       success: true,
       summary: output.summary,
-      keyChanges: toStringArray(output.key_changes_made),
-      keyLearnings: toStringArray(output.key_learnings),
+      keyChanges,
+      keyLearnings,
       timestamp: new Date(),
     };
+    this.recordIterationResult(record);
+    return record;
   }
 
   private recordFailure(
@@ -473,7 +484,7 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
     this.workspace.rollback(this.cwd);
     this.state.failCount++;
     this.state.consecutiveFailures++;
-    return {
+    const record = {
       number: this.state.currentIteration,
       success: false,
       summary: recordSummary,
@@ -481,6 +492,8 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
       keyLearnings: toStringArray(learnings),
       timestamp: new Date(),
     };
+    this.recordIterationResult(record);
+    return record;
   }
 
   private interruptibleSleep(ms: number): Promise<void> {
@@ -552,6 +565,25 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
         error: serializeError(err),
       });
       // Best-effort cleanup only.
+    }
+  }
+
+  private recordIterationResult(record: IterationRecord): void {
+    try {
+      this.resultRecorder.recordIteration({
+        runId: this.runInfo.runId,
+        iteration: record.number,
+        success: record.success,
+        summary: record.summary,
+        keyChanges: record.keyChanges,
+        keyLearnings: record.keyLearnings,
+        timestamp: record.timestamp,
+      });
+    } catch (err) {
+      appendDebugLog("result-recorder:error", {
+        iteration: record.number,
+        error: serializeError(err),
+      });
     }
   }
 

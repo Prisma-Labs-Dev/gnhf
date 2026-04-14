@@ -7,7 +7,7 @@ Phase 1 contract.
 Current scope:
 - machine-readable JSON only
 - task selection at run start
-- no tracker writeback yet
+- single-task iteration writeback
 
 ## File Shape
 
@@ -52,6 +52,7 @@ Per task:
 - `details`
 - `acceptanceCriteria`
 - `contextFiles`
+- `execution`
 
 ## Selection Rules
 
@@ -101,17 +102,57 @@ The selected task is converted into a prompt with:
 - acceptance criteria, if present
 - context files, if present
 
+## Writeback Contract
+
+When a run starts from `--tracker-file`, the selected task can be updated after each iteration.
+
+Default behavior:
+- write iteration execution metadata into `task.execution`
+- keep the task `status` unchanged unless a status override flag is provided
+
+Optional CLI flags:
+
+```bash
+gnhf --tracker-file /abs/path/tracker.json \
+  --tracker-success-status validated \
+  --tracker-failure-status blocked
+```
+
+Writeback payload:
+
+```json
+{
+  "execution": {
+    "tool": "gnhf",
+    "runId": "run-abc",
+    "iteration": 2,
+    "updatedAt": "2026-04-14T10:00:00.000Z",
+    "outcome": "success",
+    "summary": "Validated current behavior",
+    "keyChanges": [],
+    "keyLearnings": [
+      "No user-facing failure observed"
+    ]
+  }
+}
+```
+
+Status transition behavior:
+- `--tracker-success-status <status>` sets the selected task status after a successful iteration
+- `--tracker-failure-status <status>` sets the selected task status after a failed iteration
+- if these flags are omitted, writeback records evidence only
+
 ## Current Limitations
 
 - no markdown tracker parser yet
-- no writeback into the tracker yet
 - no multi-task queue progression inside a single run yet
 - no external context file loading beyond listing paths in the prompt
+- writeback is last-iteration only, not a durable history log
+- writeback currently rewrites the full JSON tracker file in place
 
 ## Planned Next Evolution
 
 Likely next additions:
-- tracker writeback contract
-- per-task outcome recording
-- machine-readable evidence/result fields
+- multi-entry execution history
+- richer per-task outcome/evidence fields
 - optional markdown projection layer for human-maintained trackers

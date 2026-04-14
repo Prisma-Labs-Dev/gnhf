@@ -39,6 +39,7 @@ import {
   loadTrackerFile,
   selectTrackerTask,
 } from "./core/tracker.js";
+import { createDefaultResultRecorder, TrackerResultRecorder } from "./core/result-recorder.js";
 import { readStdinText } from "./core/stdin.js";
 import { startSleepPrevention } from "./core/sleep.js";
 import { createAgent } from "./core/agents/factory.js";
@@ -223,6 +224,14 @@ program
     "Comma-separated task statuses eligible for automatic tracker selection",
     parseCommaSeparatedList,
   )
+  .option(
+    "--tracker-success-status <status>",
+    "Optional status to write back to the selected tracker task after a successful iteration",
+  )
+  .option(
+    "--tracker-failure-status <status>",
+    "Optional status to write back to the selected tracker task after a failed iteration",
+  )
   .option("--mock", "", false)
   .action(
     async (
@@ -238,6 +247,8 @@ program
         trackerFile?: string;
         taskId?: string;
         taskStatus?: string[];
+        trackerSuccessStatus?: string;
+        trackerFailureStatus?: string;
         mock: boolean;
       },
     ) => {
@@ -266,6 +277,7 @@ program
       let prompt = promptArg;
       let promptFromStdin = false;
       let selectedTask: { id: string; status: string } | null = null;
+      let resultRecorder = createDefaultResultRecorder();
 
       const agentName = options.agent;
       if (
@@ -314,6 +326,14 @@ program
         console.error("--task-status requires --tracker-file.");
         process.exit(1);
       }
+      if (options.trackerSuccessStatus && !options.trackerFile) {
+        console.error("--tracker-success-status requires --tracker-file.");
+        process.exit(1);
+      }
+      if (options.trackerFailureStatus && !options.trackerFile) {
+        console.error("--tracker-failure-status requires --tracker-file.");
+        process.exit(1);
+      }
       if (promptArg && options.trackerFile) {
         console.error("Pass either a prompt or --tracker-file, not both.");
         process.exit(1);
@@ -325,6 +345,16 @@ program
         });
         selectedTask = { id: task.id, status: task.status };
         prompt = buildPromptFromTrackerTask(task);
+        resultRecorder = new TrackerResultRecorder({
+          path: resolve(options.trackerFile),
+          taskId: task.id,
+          ...options.trackerSuccessStatus
+            ? { successStatus: options.trackerSuccessStatus }
+            : {},
+          ...options.trackerFailureStatus
+            ? { failureStatus: options.trackerFailureStatus }
+            : {},
+        });
       }
 
       if (!prompt && process.env.GNHF_SLEEP_INHIBITED === "1") {
@@ -531,6 +561,7 @@ program
           maxTokens: options.maxTokens,
         },
         workspace,
+        resultRecorder,
       );
       let shutdownSignal: NodeJS.Signals | null = null;
 
