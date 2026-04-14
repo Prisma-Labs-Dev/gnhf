@@ -314,6 +314,49 @@ Result:
 - CLI-focused tests passed (`28` tests)
 - built CLI exposes `gnhf validate` with the expected required options
 
+## Iteration 7: External-State Regression Coverage
+
+Date: 2026-04-14
+
+### Goal
+
+Add direct tests for the non-git external-state path instead of relying only on indirect CLI/run coverage.
+
+### What Changed
+
+Added:
+- `src/core/workspace.test.ts`
+- `src/core/workspace-launch.test.ts`
+
+Covered behavior:
+- `ExternalStateWorkspaceStrategy` never calls destructive git helpers
+- external-state success recording never commits
+- external-state commit count stays at zero
+- external-state launch uses `setupRun(..., { stateRoot, ensureIgnored: false })`
+- external-state launch does not create branches or worktrees
+- worktree finalization still cleans up zero-commit worktrees and preserves non-empty ones
+
+### Why This Matters
+
+This closes the main test gap in the fork’s non-git mode:
+- the mode now has direct assertions for “no reset/clean”
+- the launch path now has direct assertions for “no branch/worktree mutation”
+
+That makes later refactors to tracker or validation mode less likely to accidentally reintroduce git-coupled behavior.
+
+### Validation
+
+Validated locally with:
+
+```bash
+npm run typecheck
+npm test -- --run src/core/workspace.test.ts src/core/workspace-launch.test.ts
+```
+
+Result:
+- typecheck passed
+- external-state workspace tests passed (`9` tests)
+
 ## Iteration 4: Tracker Contract And Task Selection
 
 Date: 2026-04-14
