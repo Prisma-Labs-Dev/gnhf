@@ -271,6 +271,49 @@ Result:
 - typecheck passed
 - focused test suite passed (`93` tests)
 
+## Iteration 6: Dedicated Validation CLI Surface
+
+Date: 2026-04-14
+
+### Goal
+
+Expose a first-class validation command instead of requiring users to compose the tracker and external-state flags manually.
+
+### What Changed
+
+Refactored:
+- `src/cli.ts` to route both the default command and validation mode through a shared command runner
+
+Added:
+- `gnhf validate`
+
+Validation command behavior:
+- requires `--tracker-file <path>`
+- requires `--state-dir <dir>`
+- forces `external-state` mode
+- reuses the existing tracker selection and tracker writeback flow
+
+### Why This Matters
+
+This makes the non-git validation workflow discoverable and explicit without changing upstream git-first behavior for normal runs.
+
+It also closes the gap between the fork vision docs and the actual shipped CLI surface.
+
+### Validation
+
+Validated locally with:
+
+```bash
+npm run typecheck
+npm test -- --run src/cli.test.ts
+node dist/cli.mjs validate --help
+```
+
+Result:
+- typecheck passed
+- CLI-focused tests passed (`28` tests)
+- built CLI exposes `gnhf validate` with the expected required options
+
 ## Iteration 4: Tracker Contract And Task Selection
 
 Date: 2026-04-14

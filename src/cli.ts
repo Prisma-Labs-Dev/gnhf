@@ -57,6 +57,24 @@ const GNHF_REEXEC_STDIN_PROMPT_DIR_PREFIX = "gnhf-stdin-";
 const GNHF_REEXEC_STDIN_PROMPT_FILENAME = "prompt.txt";
 const VALID_WORKSPACE_MODES = ["branch", "worktree", "external-state"] as const;
 type WorkspaceMode = (typeof VALID_WORKSPACE_MODES)[number];
+type SupportedAgent = "claude" | "codex" | "rovodev" | "opencode";
+
+interface RunCommandOptions {
+  agent?: string;
+  maxIterations?: number;
+  maxTokens?: number;
+  preventSleep?: boolean;
+  worktree: boolean;
+  workspaceMode?: string;
+  stateDir?: string;
+  trackerFile?: string;
+  taskId?: string;
+  taskStatus?: string[];
+  trackerSuccessStatus?: string;
+  trackerFailureStatus?: string;
+  mock: boolean;
+  validationMode?: boolean;
+}
 
 function parseNonNegativeInteger(value: string): number {
   if (!/^\d+$/.test(value)) {
@@ -174,84 +192,19 @@ function readReexecStdinPrompt(env: NodeJS.ProcessEnv): string | undefined {
 
 const program = new Command();
 
-program
-  .name("gnhf")
-  .description("Before I go to bed, I tell my agents: good night, have fun")
-  .version(packageVersion)
-  .argument("[prompt]", "The objective for the coding agent")
-  .option(
-    "--agent <agent>",
-    "Agent to use (claude, codex, rovodev, or opencode)",
-  )
-  .option(
-    "--max-iterations <n>",
-    "Abort after N total iterations",
-    parseNonNegativeInteger,
-  )
-  .option(
-    "--max-tokens <n>",
-    "Abort after N total input+output tokens",
-    parseNonNegativeInteger,
-  )
-  .option(
-    "--prevent-sleep <mode>",
-    'Prevent system sleep during the run ("on" or "off")',
-    parseOnOffBoolean,
-  )
-  .option(
-    "--worktree",
-    "Run in a separate git worktree (enables multiple agents on the same repo)",
-    false,
-  )
-  .option(
-    "--workspace-mode <mode>",
-    "Workspace mode to use (branch, worktree, external-state)",
-  )
-  .option(
-    "--state-dir <dir>",
-    "External state directory used by external-state workspace mode",
-  )
-  .option(
-    "--tracker-file <path>",
-    "Path to a machine-readable tracker file (JSON)",
-  )
-  .option(
-    "--task-id <id>",
-    "Explicit task id to select from the tracker file",
-  )
-  .option(
-    "--task-status <list>",
-    "Comma-separated task statuses eligible for automatic tracker selection",
-    parseCommaSeparatedList,
-  )
-  .option(
-    "--tracker-success-status <status>",
-    "Optional status to write back to the selected tracker task after a successful iteration",
-  )
-  .option(
-    "--tracker-failure-status <status>",
-    "Optional status to write back to the selected tracker task after a failed iteration",
-  )
-  .option("--mock", "", false)
-  .action(
-    async (
-      promptArg: string | undefined,
-      options: {
-        agent?: string;
-        maxIterations?: number;
-        maxTokens?: number;
-        preventSleep?: boolean;
-        worktree: boolean;
-        workspaceMode?: string;
-        stateDir?: string;
-        trackerFile?: string;
-        taskId?: string;
-        taskStatus?: string[];
-        trackerSuccessStatus?: string;
-        trackerFailureStatus?: string;
-        mock: boolean;
-      },
-    ) => {
+function isSupportedAgent(agentName: string | undefined): agentName is SupportedAgent {
+  return (
+    agentName === "claude" ||
+    agentName === "codex" ||
+    agentName === "rovodev" ||
+    agentName === "opencode"
+  );
+}
+
+async function runCommand(
+  promptArg: string | undefined,
+  options: RunCommandOptions,
+): Promise<void> {
       if (options.mock) {
         const mock = new MockOrchestrator();
         enterAltScreen();
@@ -280,13 +233,7 @@ program
       let resultRecorder = createDefaultResultRecorder();
 
       const agentName = options.agent;
-      if (
-        agentName !== undefined &&
-        agentName !== "claude" &&
-        agentName !== "codex" &&
-        agentName !== "rovodev" &&
-        agentName !== "opencode"
-      ) {
+      if (agentName !== undefined && !isSupportedAgent(agentName)) {
         console.error(
           `Unknown agent: ${options.agent}. Use "claude", "codex", "rovodev", or "opencode".`,
         );
@@ -296,7 +243,7 @@ program
       const loadedConfig = loadConfig(
         agentName
           ? {
-              agent: agentName as "claude" | "codex" | "rovodev" | "opencode",
+              agent: agentName,
             }
           : {},
       );
@@ -306,18 +253,23 @@ program
           ? {}
           : { preventSleep: options.preventSleep }),
       };
-      if (
-        config.agent !== "claude" &&
-        config.agent !== "codex" &&
-        config.agent !== "rovodev" &&
-        config.agent !== "opencode"
-      ) {
+      if (!isSupportedAgent(config.agent)) {
         console.error(
           `Unknown agent: ${config.agent}. Use "claude", "codex", "rovodev", or "opencode".`,
         );
         process.exit(1);
       }
 
+      if (options.validationMode && promptArg) {
+        console.error(
+          "gnhf validate does not accept a freeform prompt. Use --tracker-file instead.",
+        );
+        process.exit(1);
+      }
+      if (options.validationMode && !options.trackerFile) {
+        console.error("gnhf validate requires --tracker-file <path>.");
+        process.exit(1);
+      }
       if (options.taskId && !options.trackerFile) {
         console.error("--task-id requires --tracker-file.");
         process.exit(1);
@@ -381,8 +333,10 @@ program
         process.exit(1);
       }
       const workspaceMode: WorkspaceMode =
-        (requestedWorkspaceMode as WorkspaceMode | undefined) ??
-        (options.worktree ? "worktree" : "branch");
+        options.validationMode
+          ? "external-state"
+          : ((requestedWorkspaceMode as WorkspaceMode | undefined) ??
+            (options.worktree ? "worktree" : "branch"));
       if (options.stateDir && workspaceMode !== "external-state") {
         console.error(
           "--state-dir is only supported with --workspace-mode external-state.",
@@ -670,8 +624,128 @@ program
       if (shutdownSignal) {
         process.exit(getSignalExitCode(shutdownSignal));
       }
-    },
-  );
+}
+
+program
+  .name("gnhf")
+  .description("Before I go to bed, I tell my agents: good night, have fun")
+  .version(packageVersion)
+  .argument("[prompt]", "The objective for the coding agent")
+  .option(
+    "--agent <agent>",
+    "Agent to use (claude, codex, rovodev, or opencode)",
+  )
+  .option(
+    "--max-iterations <n>",
+    "Abort after N total iterations",
+    parseNonNegativeInteger,
+  )
+  .option(
+    "--max-tokens <n>",
+    "Abort after N total input+output tokens",
+    parseNonNegativeInteger,
+  )
+  .option(
+    "--prevent-sleep <mode>",
+    'Prevent system sleep during the run ("on" or "off")',
+    parseOnOffBoolean,
+  )
+  .option(
+    "--worktree",
+    "Run in a separate git worktree (enables multiple agents on the same repo)",
+    false,
+  )
+  .option(
+    "--workspace-mode <mode>",
+    "Workspace mode to use (branch, worktree, external-state)",
+  )
+  .option(
+    "--state-dir <dir>",
+    "External state directory used by external-state workspace mode",
+  )
+  .option(
+    "--tracker-file <path>",
+    "Path to a machine-readable tracker file (JSON)",
+  )
+  .option(
+    "--task-id <id>",
+    "Explicit task id to select from the tracker file",
+  )
+  .option(
+    "--task-status <list>",
+    "Comma-separated task statuses eligible for automatic tracker selection",
+    parseCommaSeparatedList,
+  )
+  .option(
+    "--tracker-success-status <status>",
+    "Optional status to write back to the selected tracker task after a successful iteration",
+  )
+  .option(
+    "--tracker-failure-status <status>",
+    "Optional status to write back to the selected tracker task after a failed iteration",
+  )
+  .option("--mock", "", false)
+  .action(async (promptArg: string | undefined, options: RunCommandOptions) => {
+    await runCommand(promptArg, options);
+  });
+
+program
+  .command("validate")
+  .description(
+    "Run a tracker-backed validation loop in external-state mode without git branch/worktree management",
+  )
+  .requiredOption(
+    "--tracker-file <path>",
+    "Path to a machine-readable tracker file (JSON)",
+  )
+  .requiredOption(
+    "--state-dir <dir>",
+    "External state directory used for validation runs",
+  )
+  .option(
+    "--agent <agent>",
+    "Agent to use (claude, codex, rovodev, or opencode)",
+  )
+  .option(
+    "--max-iterations <n>",
+    "Abort after N total iterations",
+    parseNonNegativeInteger,
+  )
+  .option(
+    "--max-tokens <n>",
+    "Abort after N total input+output tokens",
+    parseNonNegativeInteger,
+  )
+  .option(
+    "--prevent-sleep <mode>",
+    'Prevent system sleep during the run ("on" or "off")',
+    parseOnOffBoolean,
+  )
+  .option(
+    "--task-id <id>",
+    "Explicit task id to select from the tracker file",
+  )
+  .option(
+    "--task-status <list>",
+    "Comma-separated task statuses eligible for automatic tracker selection",
+    parseCommaSeparatedList,
+  )
+  .option(
+    "--tracker-success-status <status>",
+    "Optional status to write back to the selected tracker task after a successful iteration",
+  )
+  .option(
+    "--tracker-failure-status <status>",
+    "Optional status to write back to the selected tracker task after a failed iteration",
+  )
+  .action(async (options: Omit<RunCommandOptions, "worktree" | "mock">) => {
+    await runCommand(undefined, {
+      ...options,
+      worktree: false,
+      mock: false,
+      validationMode: true,
+    });
+  });
 
 function enterAltScreen() {
   process.stdout.write("\x1b[?1049h");

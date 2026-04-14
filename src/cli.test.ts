@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import {
   existsSync,
   mkdtempSync,
@@ -7,6 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import type { Config } from "./core/config.js";
 import type { RunInfo } from "./core/run.js";
@@ -1401,5 +1403,18 @@ describe("cli", () => {
     } finally {
       rmSync(trackerDir, { recursive: true, force: true });
     }
+  });
+
+  it("exposes the validate subcommand in the built CLI", () => {
+    const cliPath = fileURLToPath(new URL("../dist/cli.mjs", import.meta.url));
+    const output = execFileSync(
+      process.execPath,
+      [cliPath, "validate", "--help"],
+      { encoding: "utf-8" },
+    );
+
+    expect(output).toContain("Usage: gnhf validate [options]");
+    expect(output).toContain("--tracker-file <path>");
+    expect(output).toContain("--state-dir <dir>");
   });
 });

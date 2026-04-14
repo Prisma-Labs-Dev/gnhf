@@ -64,6 +64,12 @@ Use:
 gnhf --tracker-file /abs/path/tracker.json --task-id BV-010
 ```
 
+Or with the dedicated validation surface:
+
+```bash
+gnhf validate --tracker-file /abs/path/tracker.json --state-dir /abs/path/state --task-id BV-010
+```
+
 Behavior:
 - select the exact task by `id`
 - use its metadata to build the prompt
@@ -74,6 +80,12 @@ Use:
 
 ```bash
 gnhf --tracker-file /abs/path/tracker.json
+```
+
+Or:
+
+```bash
+gnhf validate --tracker-file /abs/path/tracker.json --state-dir /abs/path/state
 ```
 
 Default eligible statuses:
@@ -89,6 +101,12 @@ Override statuses with:
 
 ```bash
 gnhf --tracker-file /abs/path/tracker.json --task-status open,external
+```
+
+Or:
+
+```bash
+gnhf validate --tracker-file /abs/path/tracker.json --state-dir /abs/path/state --task-status open,external
 ```
 
 ## Prompt Mapping

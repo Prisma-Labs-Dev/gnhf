@@ -69,6 +69,13 @@ $ gnhf --worktree "add tests for module Y" &
 $ gnhf --worktree "refactor the API layer" &
 ```
 
+```sh
+# Run tracker-backed validation work without creating git branches or worktrees
+$ gnhf validate \
+    --tracker-file /abs/path/tracker.json \
+    --state-dir /abs/path/state
+```
+
 Run `gnhf` from inside a Git repository with a clean working tree. If you are starting from a plain directory, run `git init` first.
 `gnhf` supports macOS, Linux, and Windows.
 
@@ -163,6 +170,7 @@ Pass `--worktree` to run each agent in an isolated [git worktree](https://git-sc
 | `gnhf`                    | Resume a run (when on an existing gnhf/ branch) |
 | `echo "<prompt>" \| gnhf` | Pipe prompt via stdin                           |
 | `cat prd.md \| gnhf`      | Pipe a large spec or PRD via stdin              |
+| `gnhf validate ...`       | Run a tracker-backed validation loop in external-state mode |
 
 ### Flags
 
@@ -173,7 +181,24 @@ Pass `--worktree` to run each agent in an isolated [git worktree](https://git-sc
 | `--max-tokens <n>`       | Abort after `n` total input+output tokens                          | unlimited              |
 | `--prevent-sleep <mode>` | Prevent system sleep during the run (`on`/`off` or `true`/`false`) | config file (`on`)     |
 | `--worktree`             | Run in a separate git worktree (enables multiple agents concurrently) | `false`             |
+| `--workspace-mode <mode>` | Workspace mode to use (`branch`, `worktree`, `external-state`)     | inferred from flags |
+| `--state-dir <dir>`       | External state directory used by `external-state` mode              | unset               |
+| `--tracker-file <path>`   | Load the run prompt from a machine-readable tracker file            | unset               |
+| `--task-id <id>`          | Select a specific task from the tracker file                        | first matching task |
+| `--task-status <list>`    | Comma-separated statuses eligible for automatic tracker selection   | `todo,open,unverified,external` |
+| `--tracker-success-status <status>` | Optional tracker status to write back after a successful iteration | unchanged |
+| `--tracker-failure-status <status>` | Optional tracker status to write back after a failed iteration     | unchanged |
 | `--version`              | Show version                                                       |                        |
+
+### Validation Mode
+
+Use `gnhf validate` when you want the orchestration loop but not git branch/worktree mutation. This mode:
+
+- requires `--tracker-file <path>`
+- requires `--state-dir <dir>`
+- runs in `external-state` mode
+- writes structured iteration outcomes back into the selected tracker task
+- keeps the normal prompt-based git workflow available through the default command
 
 ## Configuration
 
