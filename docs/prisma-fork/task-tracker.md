@@ -19,7 +19,7 @@ Last updated: 2026-04-14
 | F-002 | Create repo-local planning surface for the fork | `done` | `docs/prisma-fork/` created with vision, architecture, and tracker docs. |
 | F-003 | Confirm smallest viable architecture change for extensibility | `done` | Exact first seam chosen: orchestrator-owned workspace behavior only, leaving CLI branch/worktree setup unchanged for now. |
 | F-004 | Extract `WorkspaceStrategy` while preserving current behavior | `done` | Added `src/core/workspace.ts` and refactored `Orchestrator` to use it. Typecheck + targeted tests passed. |
-| F-005 | Add `ExternalStateWorkspaceStrategy` | `todo` | Non-git mode with durable state and no destructive cleanup. |
+| F-005 | Add `ExternalStateWorkspaceStrategy` | `todo` | Non-git mode with durable state and no destructive cleanup. Git launch prep is now separated in `workspace-launch.ts`, which lowers the risk of this step. |
 | F-006 | Define tracker file contract | `todo` | Decide markdown vs JSON vs YAML task format. |
 | F-007 | Add `TrackerTaskProvider` | `todo` | Select next task from tracker and inject per-iteration task context. |
 | F-008 | Add `ResultRecorder` for tracker updates | `todo` | Persist evidence/status back into tracker. |

@@ -71,3 +71,64 @@ Next architectural extraction should cover run preparation in `cli.ts`:
 That can either:
 - remain a second seam later
 - or be unified under a broader workspace factory once external-state mode is added
+
+## Iteration 2: Git Workspace Launch Seam
+
+Date: 2026-04-14
+
+### Goal
+
+Move git-backed run preparation out of `cli.ts` into a dedicated launch module without changing behavior.
+
+### What Changed
+
+Added:
+- `src/core/workspace-launch.ts`
+
+Introduced:
+- `PreparedWorkspaceLaunch`
+- `initializeGitBranchWorkspace()`
+- `initializeGitWorktreeWorkspace()`
+- `finalizePreparedWorkspace()`
+
+Refactored:
+- `src/cli.ts`
+
+### Current Boundary
+
+The launch seam now owns:
+- new branch run setup
+- worktree run setup
+- worktree cleanup/preserve decision
+- injection of the default workspace strategy for git-backed runs
+
+### Intentionally Deferred
+
+The following are still not generalized:
+- gnhf-branch resume/overwrite decision flow
+- alternate run-store roots
+- external-state mode
+- tracker selection and result recording
+
+### Validation
+
+Validated locally with:
+
+```bash
+npm run typecheck
+npm test -- --run src/cli.test.ts src/core/orchestrator.test.ts src/core/git.test.ts
+```
+
+Result:
+- typecheck passed
+- focused CLI/orchestrator/git tests passed (`59` tests)
+
+### Why This Matters
+
+This gives the fork a clear separation between:
+- runtime workspace behavior in `src/core/workspace.ts`
+- git-backed workspace launch behavior in `src/core/workspace-launch.ts`
+
+That makes the next step more straightforward:
+- add a non-git launch path
+- keep upstream git mode intact

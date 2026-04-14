@@ -18,12 +18,8 @@ import {
 } from "./core/debug-log.js";
 import {
   ensureCleanWorkingTree,
-  createBranch,
   getHeadCommit,
   getCurrentBranch,
-  getRepoRootDir,
-  createWorktree,
-  removeWorktree,
 } from "./core/git.js";
 import {
   type RunInfo,
@@ -31,13 +27,18 @@ import {
   resumeRun,
   getLastIterationNumber,
 } from "./core/run.js";
+import { createDefaultWorkspaceStrategy } from "./core/workspace.js";
+import {
+  finalizePreparedWorkspace,
+  initializeGitBranchWorkspace,
+  initializeGitWorktreeWorkspace,
+} from "./core/workspace-launch.js";
 import { readStdinText } from "./core/stdin.js";
 import { startSleepPrevention } from "./core/sleep.js";
 import { createAgent } from "./core/agents/factory.js";
 import { Orchestrator } from "./core/orchestrator.js";
 import { MockOrchestrator } from "./mock-orchestrator.js";
 import { Renderer } from "./renderer.js";
-import { slugifyPrompt } from "./utils/slugify.js";
 
 const packageVersion = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf-8"),
@@ -75,39 +76,6 @@ function humanizeErrorMessage(message: string): string {
   }
 
   return message;
-}
-
-function initializeNewBranch(prompt: string, cwd: string): RunInfo {
-  ensureCleanWorkingTree(cwd);
-  const baseCommit = getHeadCommit(cwd);
-  const branchName = slugifyPrompt(prompt);
-  createBranch(branchName, cwd);
-  const runId = branchName.split("/")[1]!;
-  return setupRun(runId, prompt, baseCommit, cwd);
-}
-
-interface WorktreeRunResult {
-  runInfo: RunInfo;
-  worktreePath: string;
-  effectiveCwd: string;
-}
-
-function initializeWorktreeRun(prompt: string, cwd: string): WorktreeRunResult {
-  // Intentionally skip ensureCleanWorkingTree() — git worktree add creates
-  // an independent working directory from HEAD; uncommitted changes in the
-  // main checkout don't carry over, so a dirty tree is harmless here.
-  const repoRoot = getRepoRootDir(cwd);
-  const baseCommit = getHeadCommit(cwd);
-  const branchName = slugifyPrompt(prompt);
-  const runId = branchName.split("/")[1]!;
-  const worktreePath = join(
-    dirname(repoRoot),
-    `${basename(repoRoot)}-gnhf-worktrees`,
-    runId,
-  );
-  createWorktree(repoRoot, worktreePath, branchName);
-  const runInfo = setupRun(runId, prompt, baseCommit, worktreePath);
-  return { runInfo, worktreePath, effectiveCwd: worktreePath };
 }
 
 function ask(question: string): Promise<string> {
@@ -308,6 +276,7 @@ program
       let effectiveCwd = cwd;
       let worktreePath: string | null = null;
       let worktreeCleanup: (() => void) | null = null;
+      let workspace = createDefaultWorkspaceStrategy();
 
       const currentBranch = getCurrentBranch(cwd);
       const onGnhfBranch = currentBranch.startsWith("gnhf/");
@@ -328,24 +297,19 @@ program
           process.exit(1);
         }
 
-        const wt = initializeWorktreeRun(prompt, cwd);
-        runInfo = wt.runInfo;
-        effectiveCwd = wt.effectiveCwd;
-        worktreePath = wt.worktreePath;
-        worktreeCleanup = () => {
-          try {
-            removeWorktree(cwd, wt.worktreePath);
-          } catch {
-            // Best-effort cleanup
-          }
-        };
+        const prepared = initializeGitWorktreeWorkspace(prompt, cwd);
+        runInfo = prepared.runInfo;
+        effectiveCwd = prepared.effectiveCwd;
+        worktreePath = prepared.worktreePath;
+        worktreeCleanup = prepared.cleanup ?? null;
+        workspace = prepared.workspace;
 
         // Ensure worktree cleanup runs even if die() or process.exit() is
         // called before reaching the normal cleanup block (e.g. orchestrator
         // crash → .catch → die → process.exit(1)).
         const exitCleanup = worktreeCleanup;
         process.on("exit", () => {
-          if (worktreeCleanup === exitCleanup) {
+          if (exitCleanup && worktreeCleanup === exitCleanup) {
             exitCleanup();
           }
         });
@@ -371,7 +335,10 @@ program
             ensureCleanWorkingTree(cwd);
             runInfo = setupRun(existingRunId, prompt, existing.baseCommit, cwd);
           } else if (answer === "n") {
-            runInfo = initializeNewBranch(prompt, cwd);
+            const prepared = initializeGitBranchWorkspace(prompt, cwd);
+            runInfo = prepared.runInfo;
+            effectiveCwd = prepared.effectiveCwd;
+            workspace = prepared.workspace;
           } else {
             process.exit(0);
           }
@@ -382,7 +349,10 @@ program
           return;
         }
 
-        runInfo = initializeNewBranch(prompt, cwd);
+        const prepared = initializeGitBranchWorkspace(prompt, cwd);
+        runInfo = prepared.runInfo;
+        effectiveCwd = prepared.effectiveCwd;
+        workspace = prepared.workspace;
       }
 
       let sleepPreventionCleanup: (() => Promise<void>) | null = null;
@@ -453,6 +423,7 @@ program
           maxIterations: options.maxIterations,
           maxTokens: options.maxTokens,
         },
+        workspace,
       );
       let shutdownSignal: NodeJS.Signals | null = null;
 
@@ -533,14 +504,23 @@ program
         });
 
         if (worktreePath) {
-          if (finalState.commitCount > 0) {
+          const { preservedWorktree } = finalizePreparedWorkspace(
+            {
+              runInfo,
+              effectiveCwd,
+              workspace,
+              worktreePath,
+              ...worktreeCleanup ? { cleanup: worktreeCleanup } : {},
+            },
+            finalState.commitCount,
+          );
+          if (preservedWorktree) {
             worktreeCleanup = null;
             console.error(
               `\n  gnhf: worktree preserved at ${worktreePath}` +
                 `\n  gnhf: merge the branch and remove with: git worktree remove "${worktreePath}"\n`,
             );
           } else {
-            worktreeCleanup?.();
             worktreeCleanup = null;
             appendDebugLog("worktree:cleaned-up", {
               worktreePath,
