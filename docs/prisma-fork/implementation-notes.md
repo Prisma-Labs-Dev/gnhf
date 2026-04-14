@@ -357,6 +357,44 @@ Result:
 - typecheck passed
 - external-state workspace tests passed (`9` tests)
 
+## Iteration 8: Git-Backed Launch Parity Coverage
+
+Date: 2026-04-14
+
+### Goal
+
+Add direct regression coverage for the default git-backed launch paths so the fork stays honest about preserving upstream behavior.
+
+### What Changed
+
+Extended:
+- `src/core/workspace-launch.test.ts`
+
+Covered behavior:
+- git branch launch validates a clean tree, reads `HEAD`, creates the branch, and initializes the run in the repo checkout
+- git worktree launch resolves the repo root, creates the worktree under the expected sibling directory, and initializes the run in that worktree
+- git worktree cleanup calls `removeWorktree(...)` with the original caller cwd
+- worktree cleanup errors remain best-effort and do not throw
+
+### Why This Matters
+
+This closes the main parity gap for the fork’s default mode:
+- the branch/worktree launch flow now has direct unit coverage
+- later tracker or validation work is less likely to accidentally perturb upstream git-first semantics
+
+### Validation
+
+Validated locally with:
+
+```bash
+npm run typecheck
+npm test -- --run src/core/workspace-launch.test.ts
+```
+
+Result:
+- typecheck passed
+- git-backed workspace-launch tests passed (`6` tests)
+
 ## Iteration 4: Tracker Contract And Task Selection
 
 Date: 2026-04-14

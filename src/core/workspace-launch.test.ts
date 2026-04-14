@@ -34,6 +34,8 @@ import {
 import { setupRun } from "./run.js";
 import {
   finalizePreparedWorkspace,
+  initializeGitBranchWorkspace,
+  initializeGitWorktreeWorkspace,
   initializeExternalStateWorkspace,
 } from "./workspace-launch.js";
 
@@ -81,6 +83,73 @@ describe("workspace launch", () => {
         summary: "validate tracker behavior",
       }),
     ).toBe(0);
+  });
+
+  it("initializes git branch runs by validating the tree, capturing HEAD, and creating a branch", () => {
+    const prompt = "ship branch parity tests";
+    const branchName = slugifyPrompt(prompt);
+    const runId = branchName.split("/")[1]!;
+
+    const prepared = initializeGitBranchWorkspace(prompt, "/repo");
+
+    expect(mockEnsureCleanWorkingTree).toHaveBeenCalledWith("/repo");
+    expect(mockGetHeadCommit).toHaveBeenCalledWith("/repo");
+    expect(mockCreateBranch).toHaveBeenCalledWith(branchName, "/repo");
+    expect(mockSetupRun).toHaveBeenCalledWith(runId, prompt, "head123", "/repo");
+    expect(mockCreateWorktree).not.toHaveBeenCalled();
+    expect(prepared.effectiveCwd).toBe("/repo");
+    expect(prepared.worktreePath).toBeNull();
+    expect(
+      mockEnsureCleanWorkingTree.mock.invocationCallOrder[0],
+    ).toBeLessThan(mockCreateBranch.mock.invocationCallOrder[0]!);
+  });
+
+  it("initializes git worktree runs from the repo root and wires cleanup through removeWorktree", () => {
+    const prompt = "ship worktree parity tests";
+    const branchName = slugifyPrompt(prompt);
+    const runId = branchName.split("/")[1]!;
+    const expectedWorktreePath = `/repo-gnhf-worktrees/${runId}`;
+
+    const prepared = initializeGitWorktreeWorkspace(prompt, "/repo/subdir");
+
+    expect(mockGetRepoRootDir).toHaveBeenCalledWith("/repo/subdir");
+    expect(mockGetHeadCommit).toHaveBeenCalledWith("/repo/subdir");
+    expect(mockCreateWorktree).toHaveBeenCalledWith(
+      "/repo",
+      expectedWorktreePath,
+      branchName,
+    );
+    expect(mockSetupRun).toHaveBeenCalledWith(
+      runId,
+      prompt,
+      "head123",
+      expectedWorktreePath,
+    );
+    expect(mockEnsureCleanWorkingTree).not.toHaveBeenCalled();
+    expect(mockCreateBranch).not.toHaveBeenCalled();
+    expect(prepared.effectiveCwd).toBe(expectedWorktreePath);
+    expect(prepared.worktreePath).toBe(expectedWorktreePath);
+
+    prepared.cleanup?.();
+
+    expect(mockRemoveWorktree).toHaveBeenCalledWith(
+      "/repo/subdir",
+      expectedWorktreePath,
+    );
+  });
+
+  it("swallows worktree cleanup errors during git worktree finalization", () => {
+    mockRemoveWorktree.mockImplementation(() => {
+      throw new Error("cleanup failed");
+    });
+
+    const prepared = initializeGitWorktreeWorkspace(
+      "cleanup edge case",
+      "/repo/subdir",
+    );
+
+    expect(() => prepared.cleanup?.()).not.toThrow();
+    expect(mockRemoveWorktree).toHaveBeenCalledTimes(1);
   });
 
   it("does not invoke cleanup when finalizing a non-worktree launch", () => {

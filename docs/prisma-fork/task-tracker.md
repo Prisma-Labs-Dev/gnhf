@@ -24,7 +24,7 @@ Last updated: 2026-04-14
 | F-007 | Add `TrackerTaskProvider` | `done` | Run-start task selection shipped via `--tracker-file`, `--task-id`, and `--task-status`. |
 | F-008 | Add `ResultRecorder` for tracker updates | `done` | Tracker writeback shipped with iteration outcome metadata plus optional success/failure status transitions. |
 | F-009 | Add CLI surface for validation mode | `done` | Dedicated `gnhf validate` subcommand now wraps tracker-backed external-state runs while leaving the default git workflow untouched. |
-| F-010 | Write regression tests for git-backed mode parity | `todo` | Ensure upstream default workflow still behaves the same. |
+| F-010 | Write regression tests for git-backed mode parity | `done` | Added direct launch-path coverage for branch/worktree setup and cleanup so the upstream git-first workflow is pinned independently of broader CLI tests. |
 | F-011 | Write tests for external-state non-git mode | `done` | Added direct coverage for `ExternalStateWorkspaceStrategy` and external-state launch/finalization so non-git mode is pinned against destructive rollback regressions. |
 
 ## Current Decision Points
