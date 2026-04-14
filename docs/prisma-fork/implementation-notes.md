@@ -132,3 +132,71 @@ This gives the fork a clear separation between:
 That makes the next step more straightforward:
 - add a non-git launch path
 - keep upstream git mode intact
+
+## Iteration 3: External-State MVP
+
+Date: 2026-04-14
+
+### Goal
+
+Ship the first usable non-git workspace mode while keeping the upstream branch/worktree modes unchanged.
+
+### What Changed
+
+Added:
+- `ExternalStateWorkspaceStrategy` in `src/core/workspace.ts`
+- `initializeExternalStateWorkspace()` in `src/core/workspace-launch.ts`
+
+Extended:
+- `src/core/run.ts` with `RunStoreOptions`
+- `setupRun(..., options)` and `resumeRunWithOptions(...)`
+
+CLI:
+- added `--workspace-mode <mode>`
+- added `--state-dir <dir>`
+
+### Current External-State Behavior
+
+When launched with:
+
+```bash
+gnhf "..." --workspace-mode external-state --state-dir /abs/path
+```
+
+the run:
+- still executes against the current working directory
+- stores run state under `/abs/path/.gnhf/runs/<runId>/`
+- does not create git branches or worktrees
+- does not commit on success
+- does not reset or clean the repo on failure
+
+### Why This Is Enough For MVP
+
+This is already enough to support:
+- validation-oriented iteration
+- evidence gathering loops
+- durable notes/logs outside the repo
+- safe execution where destructive git cleanup would be wrong
+
+### Still Missing
+
+This is not yet tracker-driven orchestration.
+
+Still missing:
+- task selection from a tracker
+- result writeback into a tracker
+- resume semantics for external-state runs beyond direct run-store reuse
+- machine-readable task backend
+
+### Validation
+
+Validated locally with:
+
+```bash
+npm run typecheck
+npm test -- --run src/cli.test.ts src/core/run.test.ts src/core/orchestrator.test.ts src/core/git.test.ts
+```
+
+Result:
+- typecheck passed
+- focused test suite passed (`85` tests)

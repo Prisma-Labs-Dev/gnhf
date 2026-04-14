@@ -64,6 +64,8 @@ async function runCliWithMocks(
   const loadConfig = vi.fn(() => config);
   const createAgent =
     overrides.createAgent ?? vi.fn(() => ({ name: config.agent }));
+  const setupRun = vi.fn(() => stubRunInfo);
+  const resumeRun = vi.fn();
   const appendDebugLog = overrides.appendDebugLog ?? vi.fn();
   const initDebugLog = overrides.initDebugLog ?? vi.fn();
   const readStdinText =
@@ -119,8 +121,8 @@ async function runCliWithMocks(
     removeWorktree: overrides.removeWorktree ?? vi.fn(),
   }));
   vi.doMock("./core/run.js", () => ({
-    setupRun: vi.fn(() => stubRunInfo),
-    resumeRun: vi.fn(),
+    setupRun,
+    resumeRun,
     getLastIterationNumber: vi.fn(() => 0),
   }));
   vi.doMock("./core/stdin.js", () => ({ readStdinText }));
@@ -187,6 +189,8 @@ async function runCliWithMocks(
     appendDebugLog,
     loadConfig,
     createAgent,
+    setupRun,
+    resumeRun,
     orchestratorCtor,
     orchestratorGetState,
     readStdinText,
@@ -1304,5 +1308,47 @@ describe("cli", () => {
     );
 
     expect(removeWorktree).not.toHaveBeenCalled();
+  });
+
+  it("supports external-state workspace mode with an explicit state directory", async () => {
+    const createWorktree = vi.fn();
+    const { setupRun, orchestratorCtor, appendDebugLog } =
+      await runCliWithMocks(
+        [
+          "ship it",
+          "--workspace-mode",
+          "external-state",
+          "--state-dir",
+          "/state",
+        ],
+        {
+          agent: "claude",
+          agentPathOverride: {},
+          agentArgsOverride: {},
+          maxConsecutiveFailures: 3,
+          preventSleep: false,
+        },
+        { createWorktree },
+      );
+
+    expect(createWorktree).not.toHaveBeenCalled();
+    expect(setupRun).toHaveBeenCalledWith(
+      expect.any(String),
+      "ship it",
+      "abc123",
+      expect.any(String),
+      {
+        stateRoot: "/state",
+        ensureIgnored: false,
+      },
+    );
+    expect(appendDebugLog).toHaveBeenCalledWith(
+      "run:start",
+      expect.objectContaining({
+        workspaceMode: "external-state",
+        stateDir: "/state",
+      }),
+    );
+    expect(orchestratorCtor).toHaveBeenCalledTimes(1);
   });
 });

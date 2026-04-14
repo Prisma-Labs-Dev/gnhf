@@ -30,6 +30,7 @@ import {
 import { createDefaultWorkspaceStrategy } from "./core/workspace.js";
 import {
   finalizePreparedWorkspace,
+  initializeExternalStateWorkspace,
   initializeGitBranchWorkspace,
   initializeGitWorktreeWorkspace,
 } from "./core/workspace-launch.js";
@@ -48,6 +49,8 @@ const GNHF_REEXEC_STDIN_PROMPT = "GNHF_REEXEC_STDIN_PROMPT";
 const GNHF_REEXEC_STDIN_PROMPT_FILE = "GNHF_REEXEC_STDIN_PROMPT_FILE";
 const GNHF_REEXEC_STDIN_PROMPT_DIR_PREFIX = "gnhf-stdin-";
 const GNHF_REEXEC_STDIN_PROMPT_FILENAME = "prompt.txt";
+const VALID_WORKSPACE_MODES = ["branch", "worktree", "external-state"] as const;
+type WorkspaceMode = (typeof VALID_WORKSPACE_MODES)[number];
 
 function parseNonNegativeInteger(value: string): number {
   if (!/^\d+$/.test(value)) {
@@ -187,6 +190,14 @@ program
     "Run in a separate git worktree (enables multiple agents on the same repo)",
     false,
   )
+  .option(
+    "--workspace-mode <mode>",
+    "Workspace mode to use (branch, worktree, external-state)",
+  )
+  .option(
+    "--state-dir <dir>",
+    "External state directory used by external-state workspace mode",
+  )
   .option("--mock", "", false)
   .action(
     async (
@@ -197,6 +208,8 @@ program
         maxTokens?: number;
         preventSleep?: boolean;
         worktree: boolean;
+        workspaceMode?: string;
+        stateDir?: string;
         mock: boolean;
       },
     ) => {
@@ -277,6 +290,31 @@ program
       let worktreePath: string | null = null;
       let worktreeCleanup: (() => void) | null = null;
       let workspace = createDefaultWorkspaceStrategy();
+      const requestedWorkspaceMode = options.workspaceMode;
+      if (
+        requestedWorkspaceMode !== undefined &&
+        !VALID_WORKSPACE_MODES.includes(requestedWorkspaceMode as WorkspaceMode)
+      ) {
+        console.error(
+          `Unknown workspace mode: ${requestedWorkspaceMode}. Use "branch", "worktree", or "external-state".`,
+        );
+        process.exit(1);
+      }
+      const workspaceMode: WorkspaceMode =
+        (requestedWorkspaceMode as WorkspaceMode | undefined) ??
+        (options.worktree ? "worktree" : "branch");
+      if (options.stateDir && workspaceMode !== "external-state") {
+        console.error(
+          "--state-dir is only supported with --workspace-mode external-state.",
+        );
+        process.exit(1);
+      }
+      if (workspaceMode === "external-state" && !options.stateDir) {
+        console.error(
+          "--workspace-mode external-state requires --state-dir <dir>.",
+        );
+        process.exit(1);
+      }
 
       const currentBranch = getCurrentBranch(cwd);
       const onGnhfBranch = currentBranch.startsWith("gnhf/");
@@ -284,7 +322,7 @@ program
       let runInfo;
       let startIteration = 0;
 
-      if (options.worktree) {
+      if (workspaceMode === "worktree") {
         if (!prompt) {
           program.help();
           return;
@@ -313,6 +351,19 @@ program
             exitCleanup();
           }
         });
+      } else if (workspaceMode === "external-state") {
+        if (!prompt) {
+          program.help();
+          return;
+        }
+        const prepared = initializeExternalStateWorkspace(
+          prompt,
+          cwd,
+          resolve(options.stateDir!),
+        );
+        runInfo = prepared.runInfo;
+        effectiveCwd = prepared.effectiveCwd;
+        workspace = prepared.workspace;
       } else if (onGnhfBranch) {
         const existingRunId = currentBranch.slice("gnhf/".length);
         const existing = resumeRun(existingRunId, cwd);
@@ -400,6 +451,9 @@ program
         preventSleep: config.preventSleep,
         agentArgsOverride: config.agentArgsOverride?.[config.agent],
         worktree: options.worktree,
+        workspaceMode,
+        stateDir:
+          workspaceMode === "external-state" ? resolve(options.stateDir!) : null,
         worktreePath,
         platform: process.platform,
         nodeVersion: process.version,

@@ -19,11 +19,11 @@ Last updated: 2026-04-14
 | F-002 | Create repo-local planning surface for the fork | `done` | `docs/prisma-fork/` created with vision, architecture, and tracker docs. |
 | F-003 | Confirm smallest viable architecture change for extensibility | `done` | Exact first seam chosen: orchestrator-owned workspace behavior only, leaving CLI branch/worktree setup unchanged for now. |
 | F-004 | Extract `WorkspaceStrategy` while preserving current behavior | `done` | Added `src/core/workspace.ts` and refactored `Orchestrator` to use it. Typecheck + targeted tests passed. |
-| F-005 | Add `ExternalStateWorkspaceStrategy` | `todo` | Non-git mode with durable state and no destructive cleanup. Git launch prep is now separated in `workspace-launch.ts`, which lowers the risk of this step. |
+| F-005 | Add `ExternalStateWorkspaceStrategy` | `done` | External-state mode shipped with explicit CLI flags. It stores run state outside the repo and avoids commits/resets. |
 | F-006 | Define tracker file contract | `todo` | Decide markdown vs JSON vs YAML task format. |
 | F-007 | Add `TrackerTaskProvider` | `todo` | Select next task from tracker and inject per-iteration task context. |
 | F-008 | Add `ResultRecorder` for tracker updates | `todo` | Persist evidence/status back into tracker. |
-| F-009 | Add CLI surface for validation mode | `todo` | Likely a new subcommand or new flags; should not break upstream default UX. |
+| F-009 | Add CLI surface for validation mode | `doing` | First surface shipped as `--workspace-mode external-state --state-dir <dir>`. Tracker-specific UX still pending. |
 | F-010 | Write regression tests for git-backed mode parity | `todo` | Ensure upstream default workflow still behaves the same. |
 | F-011 | Write tests for external-state non-git mode | `todo` | Validate no git assumptions and no destructive rollback. |
 
@@ -45,11 +45,11 @@ Open question:
 - or new flags on the existing command
 
 Current lean:
-- new subcommand
+- start with flags, keep a subcommand open for tracker-specific flows later
 
 Reason:
-- clearer separation
-- lower risk of breaking upstream prompt-driven command shape
+- flags were the smallest safe way to ship the external-state backend without disturbing upstream command behavior
+- a subcommand may still make sense later once task-provider/tracker semantics are added
 
 ### D-003: State root
 

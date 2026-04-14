@@ -11,6 +11,7 @@ import type { RunInfo } from "./run.js";
 import { setupRun } from "./run.js";
 import {
   createDefaultWorkspaceStrategy,
+  createExternalStateWorkspaceStrategy,
   type WorkspaceStrategy,
 } from "./workspace.js";
 import { slugifyPrompt } from "../utils/slugify.js";
@@ -66,6 +67,25 @@ export function initializeGitWorktreeWorkspace(
         // Best-effort cleanup only.
       }
     },
+  };
+}
+
+export function initializeExternalStateWorkspace(
+  prompt: string,
+  cwd: string,
+  stateRoot: string,
+): PreparedWorkspaceLaunch {
+  const baseCommit = getHeadCommit(cwd);
+  const branchName = slugifyPrompt(prompt);
+  const runId = branchName.split("/")[1]!;
+  return {
+    runInfo: setupRun(runId, prompt, baseCommit, cwd, {
+      stateRoot,
+      ensureIgnored: false,
+    }),
+    effectiveCwd: cwd,
+    workspace: createExternalStateWorkspaceStrategy(),
+    worktreePath: null,
   };
 }
 

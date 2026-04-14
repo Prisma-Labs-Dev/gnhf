@@ -145,6 +145,21 @@ describe("setupRun", () => {
       baseCommitPath: join(runDir, "base-commit"),
     });
   });
+
+  it("supports an external state root without mutating git ignore rules", () => {
+    const stateRoot = "/state";
+    const runDir = join(stateRoot, ".gnhf", "runs", "external-run");
+
+    const info = setupRun("external-run", "validate tracker", "abc123", P, {
+      stateRoot,
+      ensureIgnored: false,
+    });
+
+    expect(mockExecFileSync).not.toHaveBeenCalled();
+    expect(mockMkdirSync).toHaveBeenCalledWith(runDir, { recursive: true });
+    expect(info.runDir).toBe(runDir);
+    expect(info.notesPath).toBe(join(runDir, "notes.md"));
+  });
 });
 
 describe("resumeRun", () => {

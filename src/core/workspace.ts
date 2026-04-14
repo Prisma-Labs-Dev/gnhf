@@ -32,6 +32,25 @@ export class GitWorkspaceStrategy implements WorkspaceStrategy {
   }
 }
 
+export class ExternalStateWorkspaceStrategy implements WorkspaceStrategy {
+  getCommitCount(_baseCommit: string, _cwd: string): number {
+    return 0;
+  }
+
+  rollback(_cwd: string): void {
+    // External-state mode does not own the repo checkout and must not
+    // perform destructive cleanup.
+  }
+
+  recordSuccess(_params: RecordSuccessParams): number {
+    return 0;
+  }
+}
+
 export function createDefaultWorkspaceStrategy(): WorkspaceStrategy {
   return new GitWorkspaceStrategy();
+}
+
+export function createExternalStateWorkspaceStrategy(): WorkspaceStrategy {
+  return new ExternalStateWorkspaceStrategy();
 }

@@ -22,6 +22,11 @@ export interface RunInfo {
   baseCommitPath: string;
 }
 
+export interface RunStoreOptions {
+  stateRoot?: string;
+  ensureIgnored?: boolean;
+}
+
 const LOG_FILENAME = "gnhf.log";
 
 function writeSchemaFile(schemaPath: string): void {
@@ -61,10 +66,14 @@ export function setupRun(
   prompt: string,
   baseCommit: string,
   cwd: string,
+  options: RunStoreOptions = {},
 ): RunInfo {
-  ensureRunMetadataIgnored(cwd);
+  const stateRoot = options.stateRoot ?? cwd;
+  if (options.ensureIgnored ?? stateRoot === cwd) {
+    ensureRunMetadataIgnored(cwd);
+  }
 
-  const runDir = join(cwd, ".gnhf", "runs", runId);
+  const runDir = join(stateRoot, ".gnhf", "runs", runId);
   mkdirSync(runDir, { recursive: true });
 
   const promptPath = join(runDir, "prompt.md");
@@ -104,7 +113,16 @@ export function setupRun(
 }
 
 export function resumeRun(runId: string, cwd: string): RunInfo {
-  const runDir = join(cwd, ".gnhf", "runs", runId);
+  return resumeRunWithOptions(runId, cwd);
+}
+
+export function resumeRunWithOptions(
+  runId: string,
+  cwd: string,
+  options: RunStoreOptions = {},
+): RunInfo {
+  const stateRoot = options.stateRoot ?? cwd;
+  const runDir = join(stateRoot, ".gnhf", "runs", runId);
   if (!existsSync(runDir)) {
     throw new Error(`Run directory not found: ${runDir}`);
   }
