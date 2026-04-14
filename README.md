@@ -200,6 +200,84 @@ Use `gnhf validate` when you want the orchestration loop but not git branch/work
 - writes structured iteration outcomes back into the selected tracker task
 - keeps the normal prompt-based git workflow available through the default command
 
+### Task-Based Usage
+
+Use task-based mode when the work should come from a durable tracker instead of a freeform prompt.
+
+Minimal tracker example:
+
+```json
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "BV-010",
+      "title": "Investigate skills-remote flapping",
+      "status": "open",
+      "objective": "Determine whether the probe failures are user-visible.",
+      "details": "Inspect logs and direct node invocation behavior.",
+      "acceptanceCriteria": [
+        "State whether the issue is user-visible",
+        "Document current evidence"
+      ],
+      "contextFiles": [
+        "/abs/path/MEMORY.md",
+        "/abs/path/bug-validation-matrix.md"
+      ]
+    }
+  ]
+}
+```
+
+Pick the next eligible task in file order:
+
+```sh
+gnhf validate \
+  --tracker-file /abs/path/tracker.json \
+  --state-dir /abs/path/state
+```
+
+Run one specific task by id:
+
+```sh
+gnhf validate \
+  --tracker-file /abs/path/tracker.json \
+  --state-dir /abs/path/state \
+  --task-id BV-010
+```
+
+Restrict automatic selection to certain statuses:
+
+```sh
+gnhf validate \
+  --tracker-file /abs/path/tracker.json \
+  --state-dir /abs/path/state \
+  --task-status open,external
+```
+
+Write a status transition back into the tracker:
+
+```sh
+gnhf validate \
+  --tracker-file /abs/path/tracker.json \
+  --state-dir /abs/path/state \
+  --task-id BV-010 \
+  --tracker-success-status validated \
+  --tracker-failure-status blocked
+```
+
+Each iteration writes structured execution metadata back into the selected task under `execution`, including:
+
+- `runId`
+- `iteration`
+- `updatedAt`
+- `outcome`
+- `summary`
+- `keyChanges`
+- `keyLearnings`
+
+This mode is intended for validation, investigation, and tracker-driven task loops where mutating git state would be the wrong default.
+
 ## Configuration
 
 Config lives at `~/.gnhf/config.yml`:
