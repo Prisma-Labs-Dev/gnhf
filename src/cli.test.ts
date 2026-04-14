@@ -1351,4 +1351,55 @@ describe("cli", () => {
     );
     expect(orchestratorCtor).toHaveBeenCalledTimes(1);
   });
+
+  it("derives the prompt from a tracker file when no prompt arg is provided", async () => {
+    const trackerDir = mkdtempSync(join(tmpdir(), "gnhf-tracker-"));
+    const trackerPath = join(trackerDir, "tracker.json");
+    writeFileSync(
+      trackerPath,
+      JSON.stringify({
+        version: 1,
+        tasks: [
+          {
+            id: "BV-010",
+            title: "Investigate skills-remote flapping",
+            status: "open",
+            objective: "Determine whether the probe failures are user-visible.",
+          },
+        ],
+      }),
+      "utf-8",
+    );
+
+    try {
+      const { orchestratorCtor, appendDebugLog } = await runCliWithMocks(
+        ["--tracker-file", trackerPath],
+        {
+          agent: "claude",
+          agentPathOverride: {},
+          agentArgsOverride: {},
+          maxConsecutiveFailures: 3,
+          preventSleep: false,
+        },
+      );
+
+      expect(orchestratorCtor).toHaveBeenCalledTimes(1);
+      expect(orchestratorCtor.mock.calls[0]?.[3]).toContain(
+        "Task ID: BV-010",
+      );
+      expect(orchestratorCtor.mock.calls[0]?.[3]).toContain(
+        "Determine whether the probe failures are user-visible.",
+      );
+      expect(appendDebugLog).toHaveBeenCalledWith(
+        "run:start",
+        expect.objectContaining({
+          trackerFile: trackerPath,
+          trackerTaskId: "BV-010",
+          trackerTaskStatus: "open",
+        }),
+      );
+    } finally {
+      rmSync(trackerDir, { recursive: true, force: true });
+    }
+  });
 });

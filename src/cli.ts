@@ -34,6 +34,11 @@ import {
   initializeGitBranchWorkspace,
   initializeGitWorktreeWorkspace,
 } from "./core/workspace-launch.js";
+import {
+  buildPromptFromTrackerTask,
+  loadTrackerFile,
+  selectTrackerTask,
+} from "./core/tracker.js";
 import { readStdinText } from "./core/stdin.js";
 import { startSleepPrevention } from "./core/sleep.js";
 import { createAgent } from "./core/agents/factory.js";
@@ -71,6 +76,13 @@ function parseOnOffBoolean(value: string): boolean {
   throw new InvalidArgumentError(
     'must be one of: "on", "off", "true", "false"',
   );
+}
+
+function parseCommaSeparatedList(value: string): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function humanizeErrorMessage(message: string): string {
@@ -198,6 +210,19 @@ program
     "--state-dir <dir>",
     "External state directory used by external-state workspace mode",
   )
+  .option(
+    "--tracker-file <path>",
+    "Path to a machine-readable tracker file (JSON)",
+  )
+  .option(
+    "--task-id <id>",
+    "Explicit task id to select from the tracker file",
+  )
+  .option(
+    "--task-status <list>",
+    "Comma-separated task statuses eligible for automatic tracker selection",
+    parseCommaSeparatedList,
+  )
   .option("--mock", "", false)
   .action(
     async (
@@ -210,6 +235,9 @@ program
         worktree: boolean;
         workspaceMode?: string;
         stateDir?: string;
+        trackerFile?: string;
+        taskId?: string;
+        taskStatus?: string[];
         mock: boolean;
       },
     ) => {
@@ -237,6 +265,7 @@ program
       }
       let prompt = promptArg;
       let promptFromStdin = false;
+      let selectedTask: { id: string; status: string } | null = null;
 
       const agentName = options.agent;
       if (
@@ -275,6 +304,27 @@ program
           `Unknown agent: ${config.agent}. Use "claude", "codex", "rovodev", or "opencode".`,
         );
         process.exit(1);
+      }
+
+      if (options.taskId && !options.trackerFile) {
+        console.error("--task-id requires --tracker-file.");
+        process.exit(1);
+      }
+      if (options.taskStatus && !options.trackerFile) {
+        console.error("--task-status requires --tracker-file.");
+        process.exit(1);
+      }
+      if (promptArg && options.trackerFile) {
+        console.error("Pass either a prompt or --tracker-file, not both.");
+        process.exit(1);
+      }
+      if (options.trackerFile) {
+        const task = selectTrackerTask(loadTrackerFile(resolve(options.trackerFile)), {
+          ...options.taskId ? { taskId: options.taskId } : {},
+          ...options.taskStatus ? { statuses: options.taskStatus } : {},
+        });
+        selectedTask = { id: task.id, status: task.status };
+        prompt = buildPromptFromTrackerTask(task);
       }
 
       if (!prompt && process.env.GNHF_SLEEP_INHIBITED === "1") {
@@ -454,6 +504,9 @@ program
         workspaceMode,
         stateDir:
           workspaceMode === "external-state" ? resolve(options.stateDir!) : null,
+        trackerFile: options.trackerFile ? resolve(options.trackerFile) : null,
+        trackerTaskId: selectedTask?.id ?? null,
+        trackerTaskStatus: selectedTask?.status ?? null,
         worktreePath,
         platform: process.platform,
         nodeVersion: process.version,

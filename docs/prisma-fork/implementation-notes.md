@@ -200,3 +200,65 @@ npm test -- --run src/cli.test.ts src/core/run.test.ts src/core/orchestrator.tes
 Result:
 - typecheck passed
 - focused test suite passed (`85` tests)
+
+## Iteration 4: Tracker Contract And Task Selection
+
+Date: 2026-04-14
+
+### Goal
+
+Allow `gnhf` to start from a predefined task in a machine-readable tracker instead of requiring a manual prompt.
+
+### What Changed
+
+Added:
+- `src/core/tracker.ts`
+- `src/core/tracker.test.ts`
+
+CLI:
+- added `--tracker-file <path>`
+- added `--task-id <id>`
+- added `--task-status <list>`
+
+### Current Behavior
+
+Example:
+
+```bash
+gnhf --tracker-file /abs/path/tracker.json
+```
+
+This now:
+- loads a JSON tracker file
+- selects a task by explicit id or eligible status
+- converts the task into a run prompt
+- records selected task metadata in debug logs
+
+### Why This Matters
+
+This is the first real predefined-task orchestration path.
+
+It means the fork can now:
+- run without a freeform prompt
+- choose work from a durable task source
+- keep upstream default prompt mode unchanged
+
+### Still Missing
+
+- tracker writeback
+- result/evidence persistence into the tracker
+- multi-task progression across one run
+- markdown tracker support
+
+### Validation
+
+Validated locally with:
+
+```bash
+npm run typecheck
+npm test -- --run src/cli.test.ts src/core/tracker.test.ts src/core/run.test.ts src/core/orchestrator.test.ts src/core/git.test.ts
+```
+
+Result:
+- typecheck passed
+- focused test suite passed (`90` tests)

@@ -20,8 +20,8 @@ Last updated: 2026-04-14
 | F-003 | Confirm smallest viable architecture change for extensibility | `done` | Exact first seam chosen: orchestrator-owned workspace behavior only, leaving CLI branch/worktree setup unchanged for now. |
 | F-004 | Extract `WorkspaceStrategy` while preserving current behavior | `done` | Added `src/core/workspace.ts` and refactored `Orchestrator` to use it. Typecheck + targeted tests passed. |
 | F-005 | Add `ExternalStateWorkspaceStrategy` | `done` | External-state mode shipped with explicit CLI flags. It stores run state outside the repo and avoids commits/resets. |
-| F-006 | Define tracker file contract | `todo` | Decide markdown vs JSON vs YAML task format. |
-| F-007 | Add `TrackerTaskProvider` | `todo` | Select next task from tracker and inject per-iteration task context. |
+| F-006 | Define tracker file contract | `done` | Phase 1 contract is JSON-only and documented in `docs/prisma-fork/tracker-contract.md`. |
+| F-007 | Add `TrackerTaskProvider` | `done` | Run-start task selection shipped via `--tracker-file`, `--task-id`, and `--task-status`. |
 | F-008 | Add `ResultRecorder` for tracker updates | `todo` | Persist evidence/status back into tracker. |
 | F-009 | Add CLI surface for validation mode | `doing` | First surface shipped as `--workspace-mode external-state --state-dir <dir>`. Tracker-specific UX still pending. |
 | F-010 | Write regression tests for git-backed mode parity | `todo` | Ensure upstream default workflow still behaves the same. |
@@ -37,6 +37,14 @@ Open question:
 Current lean:
 - use a machine-readable format first
 - allow markdown projection later
+
+Current decision:
+- JSON first
+
+Reason:
+- easiest to validate
+- lowest parser complexity
+- easiest to extend with writeback fields later
 
 ### D-002: CLI surface
 
