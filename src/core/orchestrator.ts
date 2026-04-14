@@ -5,13 +5,11 @@ import type { Config } from "./config.js";
 import type { RunInfo } from "./run.js";
 import { appendNotes, toStringArray } from "./run.js";
 import { appendDebugLog, serializeError } from "./debug-log.js";
+import { getCurrentBranch, getHeadCommit } from "./git.js";
 import {
-  commitAll,
-  getBranchCommitCount,
-  getCurrentBranch,
-  getHeadCommit,
-  resetHard,
-} from "./git.js";
+  createDefaultWorkspaceStrategy,
+  type WorkspaceStrategy,
+} from "./workspace.js";
 import { buildIterationPrompt } from "../templates/iteration-prompt.js";
 
 export interface IterationRecord {
@@ -65,6 +63,7 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
   private cwd: string;
   private prompt: string;
   private limits: RunLimits;
+  private workspace: WorkspaceStrategy;
   private stopRequested = false;
   private stopPromise: Promise<void> | null = null;
   private activeIterationPromise: Promise<RunIterationResult> | null = null;
@@ -95,6 +94,7 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
     cwd: string,
     startIteration = 0,
     limits: RunLimits = {},
+    workspace: WorkspaceStrategy = createDefaultWorkspaceStrategy(),
   ) {
     super();
     this.config = config;
@@ -103,8 +103,9 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
     this.prompt = prompt;
     this.cwd = cwd;
     this.limits = limits;
+    this.workspace = workspace;
     this.state.currentIteration = startIteration;
-    this.state.commitCount = getBranchCommitCount(
+    this.state.commitCount = this.workspace.getCommitCount(
       this.runInfo.baseCommit,
       this.cwd,
     );
@@ -152,7 +153,7 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
       } else {
         await this.closeAgent();
       }
-      resetHard(this.cwd);
+      this.workspace.rollback(this.cwd);
       this.state.status = "stopped";
       this.emit("state", this.getState());
       this.emit("stopped");
@@ -398,7 +399,7 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
           elapsedMs,
           reason: this.pendingAbortReason,
         });
-        resetHard(this.cwd);
+        this.workspace.rollback(this.cwd);
         return { type: "aborted", reason: this.pendingAbortReason };
       }
 
@@ -439,14 +440,12 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
       toStringArray(output.key_changes_made),
       toStringArray(output.key_learnings),
     );
-    commitAll(
-      `gnhf #${this.state.currentIteration}: ${output.summary}`,
-      this.cwd,
-    );
-    this.state.commitCount = getBranchCommitCount(
-      this.runInfo.baseCommit,
-      this.cwd,
-    );
+    this.state.commitCount = this.workspace.recordSuccess({
+      cwd: this.cwd,
+      baseCommit: this.runInfo.baseCommit,
+      iteration: this.state.currentIteration,
+      summary: output.summary,
+    });
     this.state.successCount++;
     this.state.consecutiveFailures = 0;
     return {
@@ -471,7 +470,7 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
       [],
       toStringArray(learnings),
     );
-    resetHard(this.cwd);
+    this.workspace.rollback(this.cwd);
     this.state.failCount++;
     this.state.consecutiveFailures++;
     return {

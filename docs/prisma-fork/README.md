@@ -10,6 +10,7 @@ Goal:
 Documents:
 - `vision.md` — product intent and target user workflows
 - `architecture.md` — fork strategy, extension seams, and maintainability rules
+- `implementation-notes.md` — concrete fork iteration notes and validated seam changes
 - `task-tracker.md` — implementation tracker for the fork itself
 
 Guiding rule:

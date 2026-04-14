@@ -17,8 +17,8 @@ Last updated: 2026-04-14
 |---|---|---|---|
 | F-001 | Fork upstream `kunchenguid/gnhf` into `Prisma-Labs-Dev/gnhf` | `done` | Fork created and local remotes configured (`origin` = Prisma fork, `upstream` = upstream). |
 | F-002 | Create repo-local planning surface for the fork | `done` | `docs/prisma-fork/` created with vision, architecture, and tracker docs. |
-| F-003 | Confirm smallest viable architecture change for extensibility | `todo` | Decide exact seam insertion points in upstream files. |
-| F-004 | Extract `WorkspaceStrategy` while preserving current behavior | `todo` | First code change should be behavior-preserving. |
+| F-003 | Confirm smallest viable architecture change for extensibility | `done` | Exact first seam chosen: orchestrator-owned workspace behavior only, leaving CLI branch/worktree setup unchanged for now. |
+| F-004 | Extract `WorkspaceStrategy` while preserving current behavior | `done` | Added `src/core/workspace.ts` and refactored `Orchestrator` to use it. Typecheck + targeted tests passed. |
 | F-005 | Add `ExternalStateWorkspaceStrategy` | `todo` | Non-git mode with durable state and no destructive cleanup. |
 | F-006 | Define tracker file contract | `todo` | Decide markdown vs JSON vs YAML task format. |
 | F-007 | Add `TrackerTaskProvider` | `todo` | Select next task from tracker and inject per-iteration task context. |
